@@ -14,6 +14,9 @@ class GameRPG {
         // マルチプレイヤーシステム
         this.multiplayerManager = new MultiplayerManager();
         this.aiPlayerManager = new AIPlayerManager();
+        this.rankingSystem = new RankingSystem();
+        this.spectatorSystem = new SpectatorSystem();
+        this.tournamentSystem = new TournamentSystem();
         this.isMultiplayerMode = false;
         this.chatMessages = [];
         this.maxChatMessages = 10;
@@ -28,7 +31,10 @@ class GameRPG {
             equipment: false,
             shopUI: false,
             multiplayer: false,
-            chat: false
+            chat: false,
+            leaderboard: false,
+            tournament: false,
+            spectator: false
         };
 
         // プレイヤーキャラクター（RPG版）
@@ -43,6 +49,13 @@ class GameRPG {
         this.currentBattle = null;
         this.battleEnemies = [];
         this.battleResult = null;
+
+        // PvPバトルシステム
+        this.currentPvPBattle = null;
+        this.pvpOpponent = null;
+        this.pendingChallenge = null;
+        this.isInPvPBattle = false;
+        this.pvpBattleArena = null;
 
         // メッセージシステム
         this.messages = [];
@@ -150,6 +163,10 @@ class GameRPG {
                 this.handleStatusInput(keyCode);
                 break;
 
+            case 'pvp_battle':
+                this.handlePvPBattleInput(keyCode);
+                break;
+
             case 'gameOver':
                 if (keyCode === 'Space') {
                     this.restart();
@@ -214,6 +231,30 @@ class GameRPG {
         // ルーム参加
         if (keyCode === 'KeyR') {
             this.joinMultiplayerRoom();
+        }
+
+        // リーダーボード
+        if (keyCode === 'KeyL') {
+            this.showUI.leaderboard = !this.showUI.leaderboard;
+        }
+
+        // トーナメント
+        if (keyCode === 'KeyT') {
+            this.showUI.tournament = !this.showUI.tournament;
+        }
+
+        // ランクマッチ検索
+        if (keyCode === 'KeyQ') {
+            this.startMatchmaking();
+        }
+
+        // チャレンジ応答
+        if (this.pendingChallenge) {
+            if (keyCode === 'KeyY') {
+                this.acceptChallenge();
+            } else if (keyCode === 'KeyN') {
+                this.declineChallenge();
+            }
         }
     }
 
@@ -585,6 +626,9 @@ class GameRPG {
             case 'status':
                 this.renderStatusScreen();
                 break;
+            case 'pvp_battle':
+                this.renderPvPBattle();
+                break;
             case 'gameOver':
                 this.renderGameOver();
                 break;
@@ -598,6 +642,8 @@ class GameRPG {
         // マルチプレイヤーUI（常時表示可能）
         this.drawMultiplayerUI();
         this.drawChatUI();
+        this.renderLeaderboard();
+        this.renderTournament();
     }
 
     renderMenu() {
@@ -1090,6 +1136,391 @@ class GameRPG {
         this.ctx.fillStyle = '#888888';
         this.ctx.font = '10px Arial';
         this.ctx.fillText('C: 閉じる', pos.x + 10, pos.y + pos.height - 10);
+    }
+
+    // PvPバトル関連メソッド
+    startPvPBattle(battleData) {
+        this.currentPvPBattle = battleData;
+        this.pvpBattleArena = battleData.arena;
+        this.isInPvPBattle = true;
+        this.gameState = 'pvp_battle';
+
+        // プレイヤーの初期位置設定
+        this.playerChar.x = 100;
+        this.playerChar.y = this.pvpBattleArena.height / 2;
+
+        // 対戦相手の初期位置設定
+        this.pvpOpponent = {
+            id: battleData.player2,
+            x: this.pvpBattleArena.width - 100,
+            y: this.pvpBattleArena.height / 2,
+            hp: 100,
+            maxHp: 100,
+            color: '#ff0000'
+        };
+
+        this.addMessage(`PvPバトル開始: ${battleData.arena.name}`);
+
+        // スペクテーターシステムに記録
+        this.spectatorSystem.recordMatchEvent(battleData.battleId, {
+            type: 'battle_start',
+            participants: [battleData.player1, battleData.player2],
+            arena: battleData.arena
+        });
+    }
+
+    handlePvPBattleInput(keyCode) {
+        if (!this.isInPvPBattle) return;
+
+        let moved = false;
+        const moveSpeed = 5;
+
+        // 移動
+        if (keyCode === 'ArrowUp' && this.playerChar.y > 0) {
+            this.playerChar.y -= moveSpeed;
+            moved = true;
+        } else if (keyCode === 'ArrowDown' && this.playerChar.y < this.pvpBattleArena.height - this.playerChar.size) {
+            this.playerChar.y += moveSpeed;
+            moved = true;
+        } else if (keyCode === 'ArrowLeft' && this.playerChar.x > 0) {
+            this.playerChar.x -= moveSpeed;
+            moved = true;
+        } else if (keyCode === 'ArrowRight' && this.playerChar.x < this.pvpBattleArena.width - this.playerChar.size) {
+            this.playerChar.x += moveSpeed;
+            moved = true;
+        }
+
+        if (moved) {
+            this.multiplayerManager.sendBattleAction('move', null, null, {
+                x: this.playerChar.x,
+                y: this.playerChar.y
+            });
+        }
+
+        // 攻撃
+        if (keyCode === 'Space') {
+            this.performPvPAttack();
+        }
+
+        // スペシャル攻撃
+        if (keyCode === 'KeyX') {
+            this.performPvPSpecialAttack();
+        }
+
+        // バトル終了
+        if (keyCode === 'Escape') {
+            this.endPvPBattle();
+        }
+    }
+
+    performPvPAttack() {
+        const attackPower = this.rpgSystem.player.attack;
+        this.multiplayerManager.sendBattleAction('attack', this.pvpOpponent.id, attackPower, {
+            x: this.playerChar.x,
+            y: this.playerChar.y
+        });
+
+        this.addMessage('攻撃を実行しました！');
+    }
+
+    performPvPSpecialAttack() {
+        const attackPower = this.rpgSystem.player.attack * 1.5;
+        this.multiplayerManager.sendBattleAction('special_attack', this.pvpOpponent.id, attackPower, {
+            x: this.playerChar.x,
+            y: this.playerChar.y
+        });
+
+        this.addMessage('スペシャル攻撃を実行しました！');
+    }
+
+    processBattleResult(data) {
+        if (data.target === this.pvpOpponent.id) {
+            this.pvpOpponent.hp -= data.damage;
+            this.addMessage(`${data.damage}ダメージを与えました！`);
+
+            if (this.pvpOpponent.hp <= 0) {
+                this.winPvPBattle();
+            }
+        } else {
+            this.rpgSystem.player.hp -= data.damage;
+            this.addMessage(`${data.damage}ダメージを受けました！`);
+
+            if (this.rpgSystem.player.hp <= 0) {
+                this.losePvPBattle();
+            }
+        }
+
+        // スペクテーターシステムに記録
+        this.spectatorSystem.recordMatchEvent(this.currentPvPBattle.battleId, {
+            type: 'player_attack',
+            attacker: data.playerId,
+            target: data.target,
+            damage: data.damage,
+            position: data.position
+        });
+    }
+
+    winPvPBattle() {
+        this.addMessage('PvPバトルに勝利しました！');
+        this.endPvPBattle();
+
+        // ランキングシステムに記録
+        const matchResult = this.rankingSystem.recordMatch(
+            this.multiplayerManager.localPlayer.id,
+            this.pvpOpponent.id,
+            this.multiplayerManager.localPlayer.id,
+            {
+                player1Damage: this.pvpOpponent.maxHp - this.pvpOpponent.hp,
+                player2Damage: this.rpgSystem.player.maxHp - this.rpgSystem.player.hp
+            }
+        );
+
+        this.addMessage(`レーティング変化: +${matchResult.ratingChange.player1Stats || 0}`);
+    }
+
+    losePvPBattle() {
+        this.addMessage('PvPバトルに敗北しました...');
+        this.endPvPBattle();
+
+        // ランキングシステムに記録
+        const matchResult = this.rankingSystem.recordMatch(
+            this.multiplayerManager.localPlayer.id,
+            this.pvpOpponent.id,
+            this.pvpOpponent.id,
+            {
+                player1Damage: this.pvpOpponent.maxHp - this.pvpOpponent.hp,
+                player2Damage: this.rpgSystem.player.maxHp - this.rpgSystem.player.hp
+            }
+        );
+
+        this.addMessage(`レーティング変化: ${matchResult.ratingChange.player1Stats || 0}`);
+    }
+
+    endPvPBattle() {
+        // スペクテーターシステムに記録
+        if (this.currentPvPBattle) {
+            this.spectatorSystem.finishMatch(this.currentPvPBattle.battleId, {
+                winner: this.rpgSystem.player.hp > 0 ? this.multiplayerManager.localPlayer.id : this.pvpOpponent.id,
+                finalHp: {
+                    player1: this.rpgSystem.player.hp,
+                    player2: this.pvpOpponent.hp
+                }
+            });
+        }
+
+        this.currentPvPBattle = null;
+        this.pvpOpponent = null;
+        this.pvpBattleArena = null;
+        this.isInPvPBattle = false;
+        this.gameState = 'dungeon_explore';
+
+        // HP回復
+        this.rpgSystem.player.hp = this.rpgSystem.player.maxHp;
+    }
+
+    startMatchmaking() {
+        if (this.multiplayerManager.isConnected) {
+            this.multiplayerManager.requestMatchmaking('ranked');
+            this.addMessage('ランクマッチを検索中...');
+        } else {
+            this.addMessage('マルチプレイヤーに接続してください');
+        }
+    }
+
+    acceptChallenge() {
+        if (this.pendingChallenge) {
+            this.multiplayerManager.acceptChallenge(this.pendingChallenge.challengerId);
+            this.addMessage(`${this.pendingChallenge.challengerName}の挑戦を受諾しました`);
+            this.pendingChallenge = null;
+        }
+    }
+
+    declineChallenge() {
+        if (this.pendingChallenge) {
+            this.addMessage(`${this.pendingChallenge.challengerName}の挑戦を拒否しました`);
+            this.pendingChallenge = null;
+        }
+    }
+
+    renderPvPBattle() {
+        if (!this.isInPvPBattle || !this.pvpBattleArena) return;
+
+        // アリーナ背景
+        this.ctx.fillStyle = this.pvpBattleArena.background;
+        this.ctx.fillRect(100, 100, this.pvpBattleArena.width, this.pvpBattleArena.height);
+
+        // アリーナ境界
+        this.ctx.strokeStyle = '#ffffff';
+        this.ctx.lineWidth = 2;
+        this.ctx.strokeRect(100, 100, this.pvpBattleArena.width, this.pvpBattleArena.height);
+
+        // 障害物
+        this.ctx.fillStyle = '#666666';
+        this.pvpBattleArena.obstacles.forEach(obstacle => {
+            this.ctx.fillRect(
+                100 + obstacle.x,
+                100 + obstacle.y,
+                obstacle.width,
+                obstacle.height
+            );
+        });
+
+        // プレイヤー
+        this.ctx.fillStyle = this.playerChar.color;
+        this.ctx.fillRect(
+            100 + this.playerChar.x,
+            100 + this.playerChar.y,
+            this.playerChar.size,
+            this.playerChar.size
+        );
+
+        // 対戦相手
+        if (this.pvpOpponent) {
+            this.ctx.fillStyle = this.pvpOpponent.color;
+            this.ctx.fillRect(
+                100 + this.pvpOpponent.x,
+                100 + this.pvpOpponent.y,
+                this.playerChar.size,
+                this.playerChar.size
+            );
+
+            // 対戦相手のHP
+            this.renderHealthBar(
+                100 + this.pvpOpponent.x,
+                100 + this.pvpOpponent.y - 10,
+                this.pvpOpponent.hp,
+                this.pvpOpponent.maxHp
+            );
+        }
+
+        // プレイヤーのHP
+        this.renderHealthBar(
+            100 + this.playerChar.x,
+            100 + this.playerChar.y - 10,
+            this.rpgSystem.player.hp,
+            this.rpgSystem.player.maxHp
+        );
+
+        // アリーナ名
+        this.ctx.fillStyle = '#ffffff';
+        this.ctx.font = '16px Arial';
+        this.ctx.fillText(this.pvpBattleArena.name, 110, 90);
+
+        // 操作説明
+        this.ctx.fillStyle = '#cccccc';
+        this.ctx.font = '12px Arial';
+        this.ctx.fillText('矢印キー: 移動 | Space: 攻撃 | X: スペシャル攻撃 | ESC: 退出', 110, this.canvas.height - 20);
+    }
+
+    renderHealthBar(x, y, hp, maxHp) {
+        const width = 30;
+        const height = 4;
+        const hpRatio = hp / maxHp;
+
+        // 背景
+        this.ctx.fillStyle = '#333333';
+        this.ctx.fillRect(x, y, width, height);
+
+        // HP
+        this.ctx.fillStyle = hpRatio > 0.5 ? '#00ff00' : hpRatio > 0.25 ? '#ffff00' : '#ff0000';
+        this.ctx.fillRect(x, y, width * hpRatio, height);
+    }
+
+    renderLeaderboard() {
+        if (!this.showUI.leaderboard) return;
+
+        const pos = { x: this.canvas.width - 250, y: 50, width: 240, height: 300 };
+
+        // 背景
+        this.ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+        this.ctx.fillRect(pos.x, pos.y, pos.width, pos.height);
+
+        // 境界
+        this.ctx.strokeStyle = '#ffffff';
+        this.ctx.strokeRect(pos.x, pos.y, pos.width, pos.height);
+
+        // タイトル
+        this.ctx.fillStyle = '#ffffff';
+        this.ctx.font = 'bold 16px Arial';
+        this.ctx.fillText('リーダーボード', pos.x + 10, pos.y + 25);
+
+        // リーダーボードデータ
+        const leaderboard = this.rankingSystem.getLeaderboard(10);
+        this.ctx.font = '12px Arial';
+
+        leaderboard.forEach((player, index) => {
+            const y = pos.y + 50 + (index * 20);
+            const rankColor = this.getRankColor(player.rank);
+
+            this.ctx.fillStyle = rankColor;
+            this.ctx.fillText(`${index + 1}. ${player.playerId}`, pos.x + 10, y);
+            this.ctx.fillText(`${player.rating}`, pos.x + 150, y);
+            this.ctx.fillText(`${player.rank}`, pos.x + 190, y);
+        });
+
+        // 操作説明
+        this.ctx.fillStyle = '#888888';
+        this.ctx.font = '10px Arial';
+        this.ctx.fillText('L: 閉じる', pos.x + 10, pos.y + pos.height - 10);
+    }
+
+    getRankColor(rank) {
+        const colors = {
+            'Bronze': '#CD7F32',
+            'Silver': '#C0C0C0',
+            'Gold': '#FFD700',
+            'Platinum': '#E5E4E2',
+            'Diamond': '#B9F2FF',
+            'Master': '#FF6347',
+            'Grandmaster': '#FF1493'
+        };
+        return colors[rank] || '#ffffff';
+    }
+
+    renderTournament() {
+        if (!this.showUI.tournament) return;
+
+        const pos = { x: 50, y: 300, width: 300, height: 250 };
+
+        // 背景
+        this.ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+        this.ctx.fillRect(pos.x, pos.y, pos.width, pos.height);
+
+        // 境界
+        this.ctx.strokeStyle = '#ffffff';
+        this.ctx.strokeRect(pos.x, pos.y, pos.width, pos.height);
+
+        // タイトル
+        this.ctx.fillStyle = '#ffffff';
+        this.ctx.font = 'bold 16px Arial';
+        this.ctx.fillText('トーナメント', pos.x + 10, pos.y + 25);
+
+        // アクティブトーナメント
+        const activeTournaments = this.tournamentSystem.getActiveTournaments();
+        this.ctx.font = '12px Arial';
+
+        if (activeTournaments.length === 0) {
+            this.ctx.fillStyle = '#cccccc';
+            this.ctx.fillText('アクティブなトーナメントはありません', pos.x + 10, pos.y + 50);
+
+            this.ctx.fillText('新しいトーナメントを作成:', pos.x + 10, pos.y + 80);
+            this.ctx.fillText('1. 8人制シングルエリミネーション', pos.x + 10, pos.y + 100);
+            this.ctx.fillText('2. 4人制ラウンドロビン', pos.x + 10, pos.y + 120);
+        } else {
+            activeTournaments.forEach((tournament, index) => {
+                const y = pos.y + 50 + (index * 40);
+                this.ctx.fillStyle = '#ffffff';
+                this.ctx.fillText(`${tournament.name}`, pos.x + 10, y);
+                this.ctx.fillStyle = '#cccccc';
+                this.ctx.fillText(`参加者: ${tournament.participants.length}/${tournament.maxParticipants}`, pos.x + 10, y + 15);
+                this.ctx.fillText(`状態: ${tournament.status}`, pos.x + 10, y + 30);
+            });
+        }
+
+        // 操作説明
+        this.ctx.fillStyle = '#888888';
+        this.ctx.font = '10px Arial';
+        this.ctx.fillText('T: 閉じる', pos.x + 10, pos.y + pos.height - 10);
     }
 
     gameLoop() {
