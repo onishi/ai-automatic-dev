@@ -3,17 +3,23 @@ class GameRPG {
         this.canvas = document.getElementById('gameCanvas');
         this.ctx = this.canvas.getContext('2d');
 
-        // RPGとダンジョンシステム
+        // すべてのシステムを初期化
+        this.itemSystem = new ItemSystem();
         this.rpgSystem = new RPGSystem();
         this.dungeonSystem = new DungeonSystem();
+        this.equipmentSystem = new EquipmentSystem(this.itemSystem);
+        this.inventorySystem = new InventorySystem(this.itemSystem, this.equipmentSystem);
+        this.shopSystem = new ShopSystem(this.itemSystem);
 
         // ゲーム状態
-        this.gameState = 'menu'; // menu, dungeon_explore, battle, shop, status, gameOver
+        this.gameState = 'menu'; // menu, dungeon_explore, battle, shop, status, inventory, equipment, gameOver
         this.showUI = {
             miniMap: true,
             stats: true,
             inventory: false,
-            statusScreen: false
+            statusScreen: false,
+            equipment: false,
+            shopUI: false
         };
 
         // プレイヤーキャラクター（RPG版）
@@ -44,6 +50,11 @@ class GameRPG {
             messagePos: { x: 10, y: this.canvas.height - 120, width: 400, height: 110 }
         };
 
+        // ショップとUI状態
+        this.selectedShopItem = 0;
+        this.selectedInventoryItem = 0;
+        this.selectedEquipmentSlot = 0;
+
         this.bindEvents();
         this.initialize();
         this.gameLoop();
@@ -51,9 +62,32 @@ class GameRPG {
 
     initialize() {
         this.dungeonSystem.generateDungeon();
+        this.shopSystem.generateShopInventory('general', this.rpgSystem.player.level);
+
+        // 初期装備を追加
+        this.addStartingItems();
+
         this.addMessage('新しいダンジョンに入りました');
-        this.addMessage('矢印キー: 移動, スペース: アクション, S: ステータス');
+        this.addMessage('矢印キー: 移動, Space: アクション, I: インベントリ, E: 装備, S: ステータス');
         this.gameState = 'dungeon_explore';
+    }
+
+    addStartingItems() {
+        // 初期装備とアイテムを追加
+        const startingItems = [
+            this.itemSystem.createItemFromTemplate('health_potion', 'common', 1),
+            this.itemSystem.createItemFromTemplate('health_potion', 'common', 1),
+            this.itemSystem.createItemFromTemplate('basic_sword', 'common', 1),
+            this.itemSystem.createItemFromTemplate('basic_armor', 'common', 1)
+        ];
+
+        startingItems[0].quantity = 3; // 体力ポーション3個
+
+        for (const item of startingItems) {
+            if (item) {
+                this.inventorySystem.addItem(item);
+            }
+        }
     }
 
     bindEvents() {
@@ -93,6 +127,14 @@ class GameRPG {
 
             case 'shop':
                 this.handleShopInput(keyCode);
+                break;
+
+            case 'inventory':
+                this.handleInventoryInput(keyCode);
+                break;
+
+            case 'equipment':
+                this.handleEquipmentInput(keyCode);
                 break;
 
             case 'status':
@@ -137,7 +179,12 @@ class GameRPG {
 
         // インベントリ
         if (keyCode === 'KeyI') {
-            this.showUI.inventory = !this.showUI.inventory;
+            this.gameState = 'inventory';
+        }
+
+        // 装備画面
+        if (keyCode === 'KeyE') {
+            this.gameState = 'equipment';
         }
     }
 
@@ -153,9 +200,69 @@ class GameRPG {
     }
 
     handleShopInput(keyCode) {
-        // ショップ実装（後で拡張）
+        const shopInfo = this.shopSystem.getShopInfo();
+        const maxIndex = shopInfo.inventory.length - 1;
+
         if (keyCode === 'KeyE' || keyCode === 'Escape') {
             this.gameState = 'dungeon_explore';
+            return;
+        }
+
+        // ショップナビゲーション
+        if (keyCode === 'ArrowUp') {
+            this.selectedShopItem = Math.max(0, this.selectedShopItem - 1);
+        } else if (keyCode === 'ArrowDown') {
+            this.selectedShopItem = Math.min(maxIndex, this.selectedShopItem + 1);
+        } else if (keyCode === 'Space') {
+            // アイテム購入
+            this.buyShopItem(this.selectedShopItem);
+        }
+    }
+
+    handleInventoryInput(keyCode) {
+        const pageData = this.inventorySystem.getPageItems();
+
+        if (keyCode === 'KeyI' || keyCode === 'Escape') {
+            this.gameState = 'dungeon_explore';
+            return;
+        }
+
+        // ナビゲーション
+        if (keyCode === 'ArrowUp') {
+            this.selectedInventoryItem = Math.max(0, this.selectedInventoryItem - 1);
+        } else if (keyCode === 'ArrowDown') {
+            this.selectedInventoryItem = Math.min(pageData.items.length - 1, this.selectedInventoryItem + 1);
+        } else if (keyCode === 'ArrowLeft') {
+            this.inventorySystem.previousPage();
+            this.selectedInventoryItem = 0;
+        } else if (keyCode === 'ArrowRight') {
+            this.inventorySystem.nextPage();
+            this.selectedInventoryItem = 0;
+        } else if (keyCode === 'Space') {
+            // アイテム使用
+            this.useInventoryItem(this.selectedInventoryItem);
+        } else if (keyCode === 'KeyQ') {
+            // アイテム装備
+            this.equipInventoryItem(this.selectedInventoryItem);
+        }
+    }
+
+    handleEquipmentInput(keyCode) {
+        const slots = Object.keys(this.equipmentSystem.equipmentSlots);
+
+        if (keyCode === 'KeyE' || keyCode === 'Escape') {
+            this.gameState = 'dungeon_explore';
+            return;
+        }
+
+        // スロット選択
+        if (keyCode === 'ArrowUp') {
+            this.selectedEquipmentSlot = Math.max(0, this.selectedEquipmentSlot - 1);
+        } else if (keyCode === 'ArrowDown') {
+            this.selectedEquipmentSlot = Math.min(slots.length - 1, this.selectedEquipmentSlot + 1);
+        } else if (keyCode === 'Space') {
+            // 装備解除
+            this.unequipItem(this.selectedEquipmentSlot);
         }
     }
 
@@ -195,6 +302,8 @@ class GameRPG {
             this.handleTreasureRoom(currentRoom);
         } else if (currentRoom.type === 'shop') {
             this.gameState = 'shop';
+            // ショップ在庫を更新
+            this.shopSystem.generateShopInventory('general', this.rpgSystem.player.level);
         }
     }
 
@@ -250,8 +359,8 @@ class GameRPG {
 
             // アイテムドロップ判定
             if (this.rpgSystem.calculateItemDrop()) {
-                const item = this.generateRandomItem();
-                this.rpgSystem.addItem(item);
+                const item = this.itemSystem.generateRandomItem(this.rpgSystem.player.level);
+                this.inventorySystem.addItem(item);
                 this.addMessage(`${item.name}を入手した！`);
             }
         }
@@ -290,8 +399,8 @@ class GameRPG {
                 const earned = this.rpgSystem.addCredits(item.amount);
                 this.addMessage(`${earned}クレジットを獲得！`);
             } else {
-                const generatedItem = this.generateItemFromType(item.type, item.rarity);
-                this.rpgSystem.addItem(generatedItem);
+                const generatedItem = this.itemSystem.generateRandomItem(this.rpgSystem.player.level, item.rarity);
+                this.inventorySystem.addItem(generatedItem);
                 this.addMessage(`${generatedItem.name}を発見！`);
             }
         }
@@ -311,18 +420,66 @@ class GameRPG {
         return { ...selected };
     }
 
-    generateItemFromType(type, rarity = 'common') {
-        const rarityMultiplier = rarity === 'rare' ? 2 : 1;
+    // 新しいアイテム関連メソッド
+    buyShopItem(itemIndex) {
+        const result = this.shopSystem.buyItem(itemIndex, this.rpgSystem.player.credits, this.inventorySystem.inventory);
 
-        switch (type) {
-            case 'weapon_upgrade':
-                return {
-                    type: 'weapon_upgrade',
-                    name: rarity === 'rare' ? 'レア武器強化石' : '武器強化石',
-                    bonus: 3 * rarityMultiplier
-                };
-            default:
-                return this.generateRandomItem();
+        if (result.success) {
+            this.rpgSystem.spendCredits(result.cost);
+            this.addMessage(result.message);
+        } else {
+            this.addMessage(result.message);
+        }
+    }
+
+    useInventoryItem(itemIndex) {
+        const pageData = this.inventorySystem.getPageItems();
+        if (itemIndex >= 0 && itemIndex < pageData.items.length) {
+            const item = pageData.items[itemIndex];
+            const result = this.inventorySystem.useItem(item.id);
+
+            if (result.success) {
+                this.addMessage(result.message);
+                // アイテム効果を適用
+                if (result.effects.heal) {
+                    this.rpgSystem.heal(result.effects.heal);
+                }
+            } else {
+                this.addMessage(result.message);
+            }
+        }
+    }
+
+    equipInventoryItem(itemIndex) {
+        const pageData = this.inventorySystem.getPageItems();
+        if (itemIndex >= 0 && itemIndex < pageData.items.length) {
+            const item = pageData.items[itemIndex];
+            const availableSlots = this.equipmentSystem.getAvailableSlots(item);
+
+            if (availableSlots.length > 0) {
+                const result = this.equipmentSystem.equipItem(item, availableSlots[0], this.inventorySystem.inventory);
+                if (result.success) {
+                    this.addMessage(result.message);
+                } else {
+                    this.addMessage(result.message);
+                }
+            } else {
+                this.addMessage('このアイテムは装備できません');
+            }
+        }
+    }
+
+    unequipItem(slotIndex) {
+        const slots = Object.keys(this.equipmentSystem.equipmentSlots);
+        if (slotIndex >= 0 && slotIndex < slots.length) {
+            const slotName = slots[slotIndex];
+            const result = this.equipmentSystem.unequipItem(slotName, this.inventorySystem.inventory);
+
+            if (result.success) {
+                this.addMessage(result.message);
+            } else {
+                this.addMessage(result.message);
+            }
         }
     }
 
@@ -355,9 +512,16 @@ class GameRPG {
     }
 
     restart() {
+        this.itemSystem = new ItemSystem();
         this.rpgSystem = new RPGSystem();
         this.dungeonSystem = new DungeonSystem();
+        this.equipmentSystem = new EquipmentSystem(this.itemSystem);
+        this.inventorySystem = new InventorySystem(this.itemSystem, this.equipmentSystem);
+        this.shopSystem = new ShopSystem(this.itemSystem);
         this.messages = [];
+        this.selectedShopItem = 0;
+        this.selectedInventoryItem = 0;
+        this.selectedEquipmentSlot = 0;
         this.initialize();
     }
 
@@ -382,6 +546,12 @@ class GameRPG {
                 break;
             case 'shop':
                 this.renderShop();
+                break;
+            case 'inventory':
+                this.renderInventory();
+                break;
+            case 'equipment':
+                this.renderEquipment();
                 break;
             case 'status':
                 this.renderStatusScreen();
@@ -462,14 +632,42 @@ class GameRPG {
         this.ctx.fillStyle = '#001122';
         this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
 
+        const shopInfo = this.shopSystem.getShopInfo();
+
         this.ctx.fillStyle = '#ffffff';
         this.ctx.font = '24px Arial';
         this.ctx.textAlign = 'center';
-        this.ctx.fillText('ショップ', this.canvas.width / 2, 100);
+        this.ctx.fillText(shopInfo.name, this.canvas.width / 2, 50);
 
-        this.ctx.font = '16px Arial';
-        this.ctx.fillText('(実装予定)', this.canvas.width / 2, 150);
-        this.ctx.fillText('Press E to Exit', this.canvas.width / 2, 200);
+        this.ctx.font = '14px Arial';
+        this.ctx.textAlign = 'left';
+
+        // クレジット表示
+        this.ctx.fillText(`クレジット: ${this.rpgSystem.player.credits}`, 50, 80);
+        this.ctx.fillText(`評判: ${shopInfo.reputation} (${this.shopSystem.getReputationTier()})`, 300, 80);
+
+        // ショップアイテム一覧
+        let y = 110;
+        shopInfo.inventory.forEach((item, index) => {
+            const isSelected = index === this.selectedShopItem;
+            const displayInfo = this.itemSystem.getItemDisplayInfo(item);
+
+            if (isSelected) {
+                this.ctx.fillStyle = '#333333';
+                this.ctx.fillRect(40, y - 15, 720, 18);
+            }
+
+            this.ctx.fillStyle = displayInfo.color;
+            this.ctx.fillText(`${displayInfo.displayName}`, 50, y);
+            this.ctx.fillStyle = '#ffff00';
+            this.ctx.fillText(`${item.shopPrice}C`, 600, y);
+
+            y += 20;
+        });
+
+        // 操作説明
+        this.ctx.fillStyle = '#ffffff';
+        this.ctx.fillText('↑↓: 選択, Space: 購入, E: 閉じる', 50, this.canvas.height - 30);
     }
 
     renderStatusScreen() {
@@ -504,6 +702,140 @@ class GameRPG {
         }
 
         this.ctx.fillText('Press S to Close', 50, this.canvas.height - 30);
+    }
+
+    renderInventory() {
+        this.ctx.fillStyle = '#001100';
+        this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+
+        const pageData = this.inventorySystem.getPageItems();
+        const summary = this.inventorySystem.getInventorySummary();
+
+        this.ctx.fillStyle = '#ffffff';
+        this.ctx.font = '24px Arial';
+        this.ctx.textAlign = 'center';
+        this.ctx.fillText('インベントリ', this.canvas.width / 2, 40);
+
+        this.ctx.font = '14px Arial';
+        this.ctx.textAlign = 'left';
+
+        // ページ情報とスロット情報
+        this.ctx.fillText(`${summary.totalItems}/${summary.maxSlots} slots`, 50, 70);
+        this.ctx.fillText(`Page: ${pageData.currentPage + 1}/${pageData.totalPages}`, 200, 70);
+
+        // アイテム一覧
+        let y = 100;
+        pageData.items.forEach((item, index) => {
+            const isSelected = index === this.selectedInventoryItem;
+            const displayInfo = this.itemSystem.getItemDisplayInfo(item);
+
+            if (isSelected) {
+                this.ctx.fillStyle = '#333333';
+                this.ctx.fillRect(40, y - 15, 720, 18);
+            }
+
+            this.ctx.fillStyle = displayInfo.color;
+            this.ctx.fillText(`${displayInfo.displayName}`, 50, y);
+
+            if (item.type === 'consumable') {
+                this.ctx.fillStyle = '#888888';
+                this.ctx.fillText('[使用可能]', 500, y);
+            } else if (item.type === 'weapon' || item.type === 'armor' || item.type === 'accessory') {
+                this.ctx.fillStyle = '#888888';
+                this.ctx.fillText('[装備可能]', 500, y);
+            }
+
+            y += 20;
+        });
+
+        // 操作説明
+        this.ctx.fillStyle = '#ffffff';
+        this.ctx.fillText('↑↓: 選択, ←→: ページ, Space: 使用, Q: 装備, I: 閉じる', 50, this.canvas.height - 30);
+    }
+
+    renderEquipment() {
+        this.ctx.fillStyle = '#110011';
+        this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+
+        const equipped = this.equipmentSystem.getEquippedItems();
+        const totalStats = this.equipmentSystem.getTotalStats();
+        const slots = Object.keys(equipped);
+
+        this.ctx.fillStyle = '#ffffff';
+        this.ctx.font = '24px Arial';
+        this.ctx.textAlign = 'center';
+        this.ctx.fillText('装備', this.canvas.width / 2, 40);
+
+        this.ctx.font = '14px Arial';
+        this.ctx.textAlign = 'left';
+
+        // 装備スロット
+        let y = 80;
+        slots.forEach((slotName, index) => {
+            const isSelected = index === this.selectedEquipmentSlot;
+            const item = equipped[slotName];
+
+            if (isSelected) {
+                this.ctx.fillStyle = '#333333';
+                this.ctx.fillRect(40, y - 15, 350, 18);
+            }
+
+            this.ctx.fillStyle = '#cccccc';
+            this.ctx.fillText(`${this.getSlotDisplayName(slotName)}:`, 50, y);
+
+            if (item) {
+                const displayInfo = this.itemSystem.getItemDisplayInfo(item);
+                this.ctx.fillStyle = displayInfo.color;
+                this.ctx.fillText(displayInfo.displayName, 150, y);
+            } else {
+                this.ctx.fillStyle = '#666666';
+                this.ctx.fillText('(なし)', 150, y);
+            }
+
+            y += 25;
+        });
+
+        // 合計ステータス
+        this.ctx.fillStyle = '#ffffff';
+        this.ctx.fillText('装備効果:', 420, 80);
+        y = 100;
+        Object.entries(totalStats).forEach(([stat, value]) => {
+            if (value > 0) {
+                this.ctx.fillText(`${this.getStatDisplayName(stat)}: +${value}`, 420, y);
+                y += 18;
+            }
+        });
+
+        // 操作説明
+        this.ctx.fillText('↑↓: 選択, Space: 外す, E: 閉じる', 50, this.canvas.height - 30);
+    }
+
+    getSlotDisplayName(slotName) {
+        const names = {
+            weapon: '武器',
+            armor: '防具',
+            shield: 'シールド',
+            boots: 'ブーツ',
+            accessory1: 'アクセサリー1',
+            accessory2: 'アクセサリー2'
+        };
+        return names[slotName] || slotName;
+    }
+
+    getStatDisplayName(stat) {
+        const names = {
+            attack: '攻撃力',
+            defense: '防御力',
+            health: 'HP',
+            speed: '速度',
+            luck: '幸運',
+            crit_rate: 'クリティカル率',
+            life_steal: 'ライフスティール',
+            damage_reflect: 'ダメージ反射',
+            exp_bonus: '経験値ボーナス',
+            item_drop_rate: 'アイテムドロップ率'
+        };
+        return names[stat] || stat;
     }
 
     renderGameOver() {
