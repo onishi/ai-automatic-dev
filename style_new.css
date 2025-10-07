@@ -1,0 +1,86 @@
+body {
+    margin: 0;
+    padding: 0;
+    background: linear-gradient(to bottom, #000428, #004e92);
+    color: white;
+    font-family: 'Courier New', monospace;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+}
+
+.game-container {
+    text-align: center;
+}
+
+#gameCanvas {
+    border: 2px solid #00ffff;
+    background: radial-gradient(ellipse at center, #001122 0%, #000000 100%);
+    box-shadow: 0 0 20px #00ffff;
+}
+
+.game-info {
+    margin-top: 20px;
+    display: flex;
+    justify-content: space-between;
+    width: 800px;
+    align-items: flex-start;
+}
+
+.score {
+    font-size: 24px;
+    color: #00ffff;
+    text-shadow: 0 0 10px #00ffff;
+}
+
+.controls {
+    font-size: 14px;
+    color: #cccccc;
+}
+
+.controls p {
+    margin: 0;
+}
+
+/* フェーズ2-2で追加 */
+.stage-info {
+    text-align: right;
+    font-size: 14px;
+    min-width: 200px;
+}
+
+.stage-info div {
+    margin-bottom: 5px;
+    color: #ffffff;
+}
+
+#stage {
+    font-size: 18px;
+    color: #ffff00;
+    text-shadow: 0 0 8px #ffff00;
+}
+
+#weapon {
+    font-size: 16px;
+    color: #00ff00;
+    text-shadow: 0 0 8px #00ff00;
+}
+
+.progress-bar {
+    width: 100%;
+    height: 8px;
+    background-color: #333333;
+    border: 1px solid #ffffff;
+    margin-top: 10px;
+    position: relative;
+    overflow: hidden;
+}
+
+.progress-fill {
+    height: 100%;
+    background: linear-gradient(to right, #ff0000, #ffff00, #00ff00);
+    width: 0%;
+    transition: width 0.3s ease;
+    box-shadow: 0 0 10px rgba(0, 255, 0, 0.5);
+}
