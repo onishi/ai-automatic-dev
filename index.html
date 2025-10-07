@@ -3,21 +3,26 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Space Guardian</title>
+    <title>Dungeon Explorer RPG</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
     <div class="game-container">
         <canvas id="gameCanvas" width="800" height="600"></canvas>
         <div class="game-info">
-            <div class="score">Score: <span id="score">0</span></div>
             <div class="controls">
-                <p>WASD: Move | Space: Shoot | 1-4: Weapon</p>
+                <p>矢印キー: 移動 | Space: アクション | S: ステータス | I: インベントリ</p>
             </div>
         </div>
     </div>
-    <script src="stage_system.js"></script>
-    <script src="weapon_system.js"></script>
-    <script src="game.js"></script>
+    <script src="dungeon_system.js"></script>
+    <script src="rpg_system.js"></script>
+    <script src="game_rpg.js"></script>
+    <script>
+        // ゲーム開始
+        document.addEventListener('DOMContentLoaded', () => {
+            game = new GameRPG();
+        });
+    </script>
 </body>
 </html>
