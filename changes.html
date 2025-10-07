@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Space Guardian - Version History</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            background: linear-gradient(to bottom, #000428, #004e92);
+            color: white;
+            font-family: 'Courier New', monospace;
+            min-height: 100vh;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        h1 {
+            color: #00ffff;
+            text-align: center;
+            text-shadow: 0 0 10px #00ffff;
+            font-size: 2.5em;
+            margin-bottom: 40px;
+        }
+        .version {
+            background: rgba(0, 255, 255, 0.1);
+            border: 1px solid #00ffff;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 30px;
+            box-shadow: 0 0 15px rgba(0, 255, 255, 0.3);
+        }
+        .version-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+        .version-title {
+            color: #00ff00;
+            font-size: 1.8em;
+            font-weight: bold;
+        }
+        .version-date {
+            color: #ffff00;
+            font-size: 1.2em;
+        }
+        .features {
+            list-style-type: none;
+            padding: 0;
+        }
+        .features li {
+            background: rgba(255, 255, 255, 0.1);
+            margin: 8px 0;
+            padding: 10px;
+            border-radius: 5px;
+            border-left: 4px solid #00ff00;
+        }
+        .play-link {
+            display: inline-block;
+            background: #ff4444;
+            color: white;
+            padding: 10px 20px;
+            text-decoration: none;
+            border-radius: 5px;
+            margin-top: 10px;
+            transition: background 0.3s;
+        }
+        .play-link:hover {
+            background: #ff6666;
+        }
+        .current {
+            border-color: #ffff00;
+            box-shadow: 0 0 20px rgba(255, 255, 0, 0.5);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Space Guardian - Version History</h1>
+
+        <div class="version current">
+            <div class="version-header">
+                <div class="version-title">Version 1.0 (Current)</div>
+                <div class="version-date">2025-10-07</div>
+            </div>
+            <ul class="features">
+                <li>完全なサイドスクロール宇宙シューティングゲーム</li>
+                <li>プレイヤーの移動と射撃システム（WASD/矢印キー + スペース）</li>
+                <li>2種類の敵キャラクター（通常敵と高速敵）</li>
+                <li>パワーアップシステム（連射機能）</li>
+                <li>パーティクルエフェクト（爆発・パワーアップ効果）</li>
+                <li>難易度の段階的上昇システム</li>
+                <li>メニュー画面とゲームオーバー画面</li>
+                <li>スコアシステム</li>
+                <li>美しい宇宙背景と星のアニメーション</li>
+                <li>レトロなサイバーパンク風UI</li>
+            </ul>
+            <a href="index.html" class="play-link">Play Current Version</a>
+            <a href="versions/v1/index.html" class="play-link">Play Version 1.0</a>
+        </div>
+
+        <div style="text-align: center; margin-top: 40px; color: #888;">
+            <p>Developed using HTML5 Canvas, CSS3, and JavaScript</p>
+            <p>No external libraries or frameworks used</p>
+        </div>
+    </div>
+</body>
+</html>
