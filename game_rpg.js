@@ -11,6 +11,13 @@ class GameRPG {
         this.inventorySystem = new InventorySystem(this.itemSystem, this.equipmentSystem);
         this.shopSystem = new ShopSystem(this.itemSystem);
 
+        // マルチプレイヤーシステム
+        this.multiplayerManager = new MultiplayerManager();
+        this.aiPlayerManager = new AIPlayerManager();
+        this.isMultiplayerMode = false;
+        this.chatMessages = [];
+        this.maxChatMessages = 10;
+
         // ゲーム状態
         this.gameState = 'menu'; // menu, dungeon_explore, battle, shop, status, inventory, equipment, gameOver
         this.showUI = {
@@ -19,7 +26,9 @@ class GameRPG {
             inventory: false,
             statusScreen: false,
             equipment: false,
-            shopUI: false
+            shopUI: false,
+            multiplayer: false,
+            chat: false
         };
 
         // プレイヤーキャラクター（RPG版）
@@ -165,6 +174,11 @@ class GameRPG {
 
         if (moved) {
             this.onRoomEnter();
+            // マルチプレイヤーに移動を送信
+            this.sendPlayerAction('move', {
+                x: this.dungeonSystem.currentPosition.x,
+                y: this.dungeonSystem.currentPosition.y
+            });
         }
 
         // アクション
@@ -185,6 +199,21 @@ class GameRPG {
         // 装備画面
         if (keyCode === 'KeyE') {
             this.gameState = 'equipment';
+        }
+
+        // マルチプレイヤー画面
+        if (keyCode === 'KeyM') {
+            this.showUI.multiplayer = !this.showUI.multiplayer;
+        }
+
+        // チャット画面
+        if (keyCode === 'KeyC') {
+            this.showUI.chat = !this.showUI.chat;
+        }
+
+        // ルーム参加
+        if (keyCode === 'KeyR') {
+            this.joinMultiplayerRoom();
         }
     }
 
@@ -565,6 +594,10 @@ class GameRPG {
         if (this.gameState === 'dungeon_explore' || this.gameState === 'battle') {
             this.renderUI();
         }
+
+        // マルチプレイヤーUI（常時表示可能）
+        this.drawMultiplayerUI();
+        this.drawChatUI();
     }
 
     renderMenu() {
@@ -906,6 +939,157 @@ class GameRPG {
         }
 
         this.ctx.globalAlpha = 1;
+    }
+
+    // マルチプレイヤー関連メソッド
+    joinMultiplayerRoom() {
+        if (!this.isMultiplayerMode) {
+            this.multiplayerManager.connect();
+
+            const playerData = {
+                id: `player_${Date.now()}`,
+                name: 'Player',
+                level: this.rpgSystem.player.level,
+                class: this.rpgSystem.player.class,
+                x: this.playerChar.x,
+                y: this.playerChar.y
+            };
+
+            const roomId = 'dungeon_room_' + Math.floor(Math.random() * 100);
+
+            if (this.multiplayerManager.joinRoom(roomId, playerData)) {
+                this.isMultiplayerMode = true;
+                this.addMessage(`ルーム ${roomId} に参加しています...`);
+
+                // AIプレイヤーを追加
+                this.addAIPlayers();
+            }
+        } else {
+            this.addMessage('既にマルチプレイヤーモードです');
+        }
+    }
+
+    addAIPlayers() {
+        const aiPlayerData = [
+            { id: 'ai_1', name: 'アリス', level: 15, class: 'Mage' },
+            { id: 'ai_2', name: 'ボブ', level: 12, class: 'Warrior' },
+            { id: 'ai_3', name: 'チャーリー', level: 18, class: 'Rogue' }
+        ];
+
+        aiPlayerData.forEach(data => {
+            this.aiPlayerManager.addAIPlayer(data);
+        });
+
+        this.aiPlayerManager.startSimulation(this);
+    }
+
+    sendPlayerAction(action, data) {
+        if (this.isMultiplayerMode) {
+            this.multiplayerManager.sendPlayerAction(action, data);
+        }
+    }
+
+    addChatMessage(message) {
+        this.chatMessages.push({
+            text: message,
+            time: Date.now()
+        });
+
+        if (this.chatMessages.length > this.maxChatMessages) {
+            this.chatMessages.shift();
+        }
+    }
+
+    addMessage(text) {
+        this.messages.push({
+            text: text,
+            time: Date.now()
+        });
+
+        if (this.messages.length > this.maxMessages) {
+            this.messages.shift();
+        }
+    }
+
+    drawMultiplayerUI() {
+        if (!this.showUI.multiplayer) return;
+
+        const pos = { x: 420, y: 10, width: 360, height: 200 };
+
+        // 背景
+        this.ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+        this.ctx.fillRect(pos.x, pos.y, pos.width, pos.height);
+
+        this.ctx.strokeStyle = '#00ff00';
+        this.ctx.strokeRect(pos.x, pos.y, pos.width, pos.height);
+
+        // タイトル
+        this.ctx.fillStyle = '#00ff00';
+        this.ctx.font = 'bold 14px Arial';
+        this.ctx.textAlign = 'left';
+        this.ctx.fillText('マルチプレイヤー', pos.x + 10, pos.y + 20);
+
+        // 接続状態
+        const connectionStatus = this.multiplayerManager.getConnectionStatus();
+        this.ctx.font = '12px Arial';
+        this.ctx.fillStyle = connectionStatus.isConnected ? '#00ff00' : '#ff0000';
+        this.ctx.fillText(`状態: ${connectionStatus.status}`, pos.x + 10, pos.y + 40);
+
+        if (connectionStatus.room) {
+            this.ctx.fillStyle = '#ffffff';
+            this.ctx.fillText(`ルーム: ${connectionStatus.room.id}`, pos.x + 10, pos.y + 60);
+
+            // プレイヤーリスト
+            this.ctx.fillText('プレイヤー:', pos.x + 10, pos.y + 80);
+
+            let yOffset = 100;
+            if (connectionStatus.room.players) {
+                connectionStatus.room.players.forEach((player, index) => {
+                    const isLocal = player.id === connectionStatus.localPlayer?.id;
+                    this.ctx.fillStyle = isLocal ? '#ffff00' : '#ffffff';
+                    this.ctx.fillText(`${player.name} (Lv.${player.level} ${player.class})`,
+                                    pos.x + 20, pos.y + yOffset + index * 15);
+                });
+            }
+        }
+
+        // 操作説明
+        this.ctx.fillStyle = '#888888';
+        this.ctx.font = '10px Arial';
+        this.ctx.fillText('R: ルーム参加  C: チャット  M: 閉じる', pos.x + 10, pos.y + pos.height - 10);
+    }
+
+    drawChatUI() {
+        if (!this.showUI.chat) return;
+
+        const pos = { x: 420, y: 220, width: 360, height: 150 };
+
+        // 背景
+        this.ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+        this.ctx.fillRect(pos.x, pos.y, pos.width, pos.height);
+
+        this.ctx.strokeStyle = '#00ff00';
+        this.ctx.strokeRect(pos.x, pos.y, pos.width, pos.height);
+
+        // タイトル
+        this.ctx.fillStyle = '#00ff00';
+        this.ctx.font = 'bold 14px Arial';
+        this.ctx.textAlign = 'left';
+        this.ctx.fillText('チャット', pos.x + 10, pos.y + 20);
+
+        // チャットメッセージ
+        this.ctx.font = '11px Arial';
+        this.ctx.fillStyle = '#ffffff';
+
+        for (let i = 0; i < Math.min(this.chatMessages.length, 8); i++) {
+            const message = this.chatMessages[i];
+            this.ctx.fillText(message.text, pos.x + 10, pos.y + 40 + i * 14);
+        }
+
+        // 操作説明
+        this.ctx.fillStyle = '#888888';
+        this.ctx.font = '10px Arial';
+        this.ctx.fillText('C: 閉じる', pos.x + 10, pos.y + pos.height - 10);
     }
 
     gameLoop() {
