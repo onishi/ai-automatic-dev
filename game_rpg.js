@@ -10,6 +10,8 @@ class GameRPG {
         this.equipmentSystem = new EquipmentSystem(this.itemSystem);
         this.inventorySystem = new InventorySystem(this.itemSystem, this.equipmentSystem);
         this.shopSystem = new ShopSystem(this.itemSystem);
+        this.resourceManager = new ResourceManager();
+        this.craftSystem = new CraftSystem();
 
         // マルチプレイヤーシステム
         this.multiplayerManager = new MultiplayerManager();
@@ -34,7 +36,9 @@ class GameRPG {
             chat: false,
             leaderboard: false,
             tournament: false,
-            spectator: false
+            spectator: false,
+            resources: true,
+            craft: false
         };
 
         // プレイヤーキャラクター（RPG版）
@@ -86,11 +90,18 @@ class GameRPG {
         this.dungeonSystem.generateDungeon(this.rpgSystem.player.level);
         this.shopSystem.generateShopInventory('general', this.rpgSystem.player.level);
 
+        // リソースノードを生成
+        this.resourceManager.generateNodes(
+            { width: this.dungeonSystem.width, height: this.dungeonSystem.height },
+            this.dungeonSystem.currentFloor
+        );
+
         // 初期装備を追加
         this.addStartingItems();
 
         this.addMessage('新しいダンジョンに入りました');
         this.addMessage('矢印キー: 移動, Space: アクション, I: インベントリ, E: 装備, S: ステータス');
+        this.addMessage('H: リソース採取, K: クラフトメニュー');
         this.gameState = 'dungeon_explore';
     }
 
@@ -255,6 +266,16 @@ class GameRPG {
             } else if (keyCode === 'KeyN') {
                 this.declineChallenge();
             }
+        }
+
+        // リソース採取
+        if (keyCode === 'KeyH') {
+            this.tryHarvestResource();
+        }
+
+        // クラフトメニュー
+        if (keyCode === 'KeyK') {
+            this.showUI.craft = !this.showUI.craft;
         }
     }
 
@@ -596,7 +617,8 @@ class GameRPG {
     }
 
     update() {
-        // ゲームロジックの更新は主にキー入力で処理されるため、ここでは最小限
+        // スタミナ・空腹システムの更新
+        this.rpgSystem.updateSurvivalSystem();
     }
 
     render() {
@@ -657,6 +679,11 @@ class GameRPG {
     }
 
     renderDungeonExplore() {
+        // リソースノードを描画
+        const cameraX = this.dungeonSystem.playerMapX * this.dungeonSystem.cellSize - this.canvas.width / 2 + this.dungeonSystem.cellSize / 2;
+        const cameraY = this.dungeonSystem.playerMapY * this.dungeonSystem.cellSize - this.canvas.height / 2 + this.dungeonSystem.cellSize / 2;
+        this.resourceManager.drawNodes(this.ctx, cameraX, cameraY);
+
         // プレイヤーキャラクターを描画
         this.ctx.fillStyle = this.playerChar.color;
         this.ctx.fillRect(
@@ -964,6 +991,19 @@ class GameRPG {
 
         // メッセージ
         this.renderMessages();
+
+        // リソース表示
+        if (this.showUI.resources) {
+            this.renderResources();
+        }
+
+        // スタミナ・空腹バー
+        this.renderSurvivalBars();
+
+        // クラフトメニュー
+        if (this.showUI.craft) {
+            this.renderCraftMenu();
+        }
     }
 
     renderMessages() {
@@ -985,6 +1025,135 @@ class GameRPG {
         }
 
         this.ctx.globalAlpha = 1;
+    }
+
+    renderResources() {
+        const pos = { x: 380, y: 10, width: 200, height: 140 };
+
+        this.ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+        this.ctx.fillRect(pos.x, pos.y, pos.width, pos.height);
+
+        this.ctx.strokeStyle = '#4169E1';
+        this.ctx.strokeRect(pos.x, pos.y, pos.width, pos.height);
+
+        this.ctx.fillStyle = '#ffffff';
+        this.ctx.font = 'bold 12px Arial';
+        this.ctx.textAlign = 'left';
+        this.ctx.fillText('リソース', pos.x + 5, pos.y + 15);
+
+        this.ctx.font = '10px Arial';
+        let y = pos.y + 30;
+
+        const resourceTypes = ['wood', 'ore', 'herb', 'crystal', 'food'];
+        const resourceNames = { wood: '木材', ore: '鉱石', herb: '薬草', crystal: '結晶', food: '食材' };
+
+        for (let type of resourceTypes) {
+            const total = Object.values(this.resourceManager.resources[type]).reduce((a, b) => a + b, 0);
+            if (total > 0) {
+                this.ctx.fillStyle = '#cccccc';
+                this.ctx.fillText(`${resourceNames[type]}: ${total}`, pos.x + 5, y);
+                y += 15;
+            }
+        }
+
+        const totalRes = this.resourceManager.getTotalResources();
+        const maxRes = this.resourceManager.maxStorageCapacity;
+        this.ctx.fillStyle = totalRes > maxRes * 0.9 ? '#ff0000' : '#ffff00';
+        this.ctx.fillText(`容量: ${totalRes}/${maxRes}`, pos.x + 5, pos.y + pos.height - 10);
+    }
+
+    renderSurvivalBars() {
+        const pos = { x: 590, y: 10, width: 200, height: 60 };
+
+        this.ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+        this.ctx.fillRect(pos.x, pos.y, pos.width, pos.height);
+
+        this.ctx.strokeStyle = '#00ffff';
+        this.ctx.strokeRect(pos.x, pos.y, pos.width, pos.height);
+
+        // スタミナバー
+        this.ctx.fillStyle = '#ffffff';
+        this.ctx.font = '10px Arial';
+        this.ctx.textAlign = 'left';
+        this.ctx.fillText('スタミナ', pos.x + 5, pos.y + 15);
+
+        const staminaRatio = this.rpgSystem.player.stamina / this.rpgSystem.player.maxStamina;
+        this.ctx.fillStyle = '#333333';
+        this.ctx.fillRect(pos.x + 5, pos.y + 20, pos.width - 10, 10);
+        this.ctx.fillStyle = staminaRatio > 0.5 ? '#00ff00' : staminaRatio > 0.25 ? '#ffff00' : '#ff0000';
+        this.ctx.fillRect(pos.x + 5, pos.y + 20, (pos.width - 10) * staminaRatio, 10);
+
+        this.ctx.fillStyle = '#ffffff';
+        this.ctx.font = '8px Arial';
+        this.ctx.textAlign = 'center';
+        this.ctx.fillText(`${Math.floor(this.rpgSystem.player.stamina)}/${this.rpgSystem.player.maxStamina}`, pos.x + pos.width / 2, pos.y + 28);
+
+        // 空腹度バー
+        this.ctx.fillStyle = '#ffffff';
+        this.ctx.font = '10px Arial';
+        this.ctx.textAlign = 'left';
+        this.ctx.fillText('空腹度', pos.x + 5, pos.y + 45);
+
+        const hungerRatio = this.rpgSystem.player.hunger / this.rpgSystem.player.maxHunger;
+        this.ctx.fillStyle = '#333333';
+        this.ctx.fillRect(pos.x + 5, pos.y + 50, pos.width - 10, 10);
+        this.ctx.fillStyle = hungerRatio < 0.5 ? '#00ff00' : hungerRatio < 0.75 ? '#ffff00' : '#ff0000';
+        this.ctx.fillRect(pos.x + 5, pos.y + 50, (pos.width - 10) * hungerRatio, 10);
+
+        this.ctx.fillStyle = '#ffffff';
+        this.ctx.font = '8px Arial';
+        this.ctx.textAlign = 'center';
+        this.ctx.fillText(`${Math.floor(this.rpgSystem.player.hunger)}/${this.rpgSystem.player.maxHunger}`, pos.x + pos.width / 2, pos.y + 58);
+    }
+
+    renderCraftMenu() {
+        const pos = { x: 200, y: 100, width: 400, height: 400 };
+
+        this.ctx.fillStyle = 'rgba(0, 0, 0, 0.9)';
+        this.ctx.fillRect(pos.x, pos.y, pos.width, pos.height);
+
+        this.ctx.strokeStyle = '#FFD700';
+        this.ctx.lineWidth = 2;
+        this.ctx.strokeRect(pos.x, pos.y, pos.width, pos.height);
+
+        this.ctx.fillStyle = '#FFD700';
+        this.ctx.font = 'bold 16px Arial';
+        this.ctx.textAlign = 'center';
+        this.ctx.fillText('クラフトメニュー', pos.x + pos.width / 2, pos.y + 25);
+
+        this.ctx.fillStyle = '#ffffff';
+        this.ctx.font = '12px Arial';
+        this.ctx.textAlign = 'left';
+
+        const recipes = this.craftSystem.getAllRecipes();
+        let y = pos.y + 50;
+
+        for (let i = 0; i < Math.min(recipes.length, 15); i++) {
+            const recipe = recipes[i];
+            const canCraft = recipe.canCraft(this.resourceManager);
+
+            this.ctx.fillStyle = canCraft ? '#00ff00' : '#888888';
+            this.ctx.fillText(`${i + 1}. ${recipe.name}`, pos.x + 10, y);
+
+            // 必要リソース
+            this.ctx.font = '10px Arial';
+            let reqText = '';
+            for (let resType in recipe.requirements) {
+                for (let rarity in recipe.requirements[resType]) {
+                    const amount = recipe.requirements[resType][rarity];
+                    reqText += `${resType}(${rarity}):${amount} `;
+                }
+            }
+            this.ctx.fillStyle = '#cccccc';
+            this.ctx.fillText(reqText, pos.x + 20, y + 12);
+
+            this.ctx.font = '12px Arial';
+            y += 25;
+        }
+
+        this.ctx.fillStyle = '#888888';
+        this.ctx.font = '10px Arial';
+        this.ctx.fillText('K: 閉じる | 数字キー: クラフト', pos.x + 10, pos.y + pos.height - 10);
     }
 
     // マルチプレイヤー関連メソッド
@@ -1523,6 +1692,46 @@ class GameRPG {
         this.ctx.fillStyle = '#888888';
         this.ctx.font = '10px Arial';
         this.ctx.fillText('T: 閉じる', pos.x + 10, pos.y + pos.height - 10);
+    }
+
+    tryHarvestResource() {
+        const playerPos = {
+            x: this.dungeonSystem.playerMapX * this.dungeonSystem.cellSize + this.dungeonSystem.cellSize / 2,
+            y: this.dungeonSystem.playerMapY * this.dungeonSystem.cellSize + this.dungeonSystem.cellSize / 2
+        };
+
+        const skillLevel = this.rpgSystem.player.skills.mining; // 仮にminingスキルを使用
+        const result = this.resourceManager.tryHarvest(
+            playerPos,
+            this.rpgSystem.player.level,
+            skillLevel,
+            this.rpgSystem.player.stamina
+        );
+
+        if (result) {
+            if (this.rpgSystem.consumeStamina(result.staminaCost)) {
+                this.addMessage(`${result.type} (${result.rarity}) x${result.amount} を採取しました`);
+
+                // スキル経験値を追加
+                const skillName = this.getSkillNameForResource(result.type);
+                this.rpgSystem.addSkillExp(skillName, 10);
+            } else {
+                this.addMessage('スタミナが不足しています');
+            }
+        } else {
+            this.addMessage('近くに採取できるリソースがありません');
+        }
+    }
+
+    getSkillNameForResource(resourceType) {
+        const mapping = {
+            ore: 'mining',
+            herb: 'herbalism',
+            wood: 'mining',
+            crystal: 'mining',
+            food: 'herbalism'
+        };
+        return mapping[resourceType] || 'mining';
     }
 
     gameLoop() {

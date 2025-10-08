@@ -8,6 +8,21 @@ class RPGSystem {
             health: 100,
             maxHealth: 100,
 
+            // スタミナ・空腹システム
+            stamina: 100,
+            maxStamina: 100,
+            hunger: 0,
+            maxHunger: 100,
+
+            // スキルレベル（サバイバル用）
+            skills: {
+                mining: 1,
+                herbalism: 1,
+                craftsmanship: 1,
+                cooking: 1,
+                building: 1
+            },
+
             // ベースステータス
             baseStats: {
                 attack: 10,
@@ -40,6 +55,8 @@ class RPGSystem {
 
         this.maxLevel = 50;
         this.statPointsPerLevel = 3;
+        this.lastHungerUpdate = Date.now();
+        this.lastStaminaRegen = Date.now();
     }
 
     // 総合ステータスを計算
@@ -267,5 +284,71 @@ class RPGSystem {
         if (data && data.player) {
             this.player = { ...this.player, ...data.player };
         }
+    }
+
+    // スタミナ消費
+    consumeStamina(amount) {
+        if (this.player.stamina >= amount) {
+            this.player.stamina -= amount;
+            return true;
+        }
+        return false;
+    }
+
+    // スタミナ回復
+    recoverStamina(amount) {
+        this.player.stamina = Math.min(this.player.maxStamina, this.player.stamina + amount);
+    }
+
+    // 空腹度を増加
+    increaseHunger(amount) {
+        this.player.hunger = Math.min(this.player.maxHunger, this.player.hunger + amount);
+    }
+
+    // 食事で空腹度を減らす
+    consumeFood(hungerReduction, staminaRecovery = 0, hpRecovery = 0) {
+        this.player.hunger = Math.max(0, this.player.hunger - hungerReduction);
+        if (staminaRecovery > 0) {
+            this.recoverStamina(staminaRecovery);
+        }
+        if (hpRecovery > 0) {
+            this.heal(hpRecovery);
+        }
+    }
+
+    // スタミナ・空腹システムの更新
+    updateSurvivalSystem(deltaTime) {
+        const now = Date.now();
+
+        // 空腹度の自然増加（10秒ごとに1増加）
+        if (now - this.lastHungerUpdate > 10000) {
+            this.increaseHunger(1);
+            this.lastHungerUpdate = now;
+        }
+
+        // 空腹度が最大の場合、HPが減少
+        if (this.player.hunger >= this.player.maxHunger) {
+            if (now - this.lastHungerUpdate > 5000) {
+                this.player.health = Math.max(0, this.player.health - 5);
+                this.lastHungerUpdate = now;
+            }
+            // スタミナ回復停止
+            return;
+        }
+
+        // スタミナの自然回復（3秒ごとに10回復）
+        if (now - this.lastStaminaRegen > 3000) {
+            this.recoverStamina(10);
+            this.lastStaminaRegen = now;
+        }
+    }
+
+    // スキル経験値を追加
+    addSkillExp(skillName, amount) {
+        if (!this.player.skills.hasOwnProperty(skillName)) return false;
+
+        // 簡易的なスキルレベルアップ（10経験値で1レベル）
+        this.player.skills[skillName] += amount / 10;
+        return true;
     }
 }
