@@ -121,7 +121,7 @@ class GameRPG {
 
         this.addMessage('新しいダンジョンに入りました');
         this.addMessage('矢印キー: 移動, Space: アクション, I: インベントリ, E: 装備, S: ステータス');
-        this.addMessage('H: リソース採取, K: クラフトメニュー, B: 基地, Q: クエスト, G: ギルド, T: トレード');
+        this.addMessage('H: リソース採取, K: クラフトメニュー, B: 基地, J: クエスト, G: ギルド, U: トレード');
         this.gameState = 'dungeon_explore';
     }
 
@@ -317,6 +317,15 @@ class GameRPG {
         if (keyCode === 'KeyU') {
             this.showUI.trade = !this.showUI.trade;
         }
+
+        // クラフトメニューが開いている場合の数字キー入力
+        if (this.showUI.craft) {
+            const digitMatch = keyCode.match(/^Digit(\d)$/);
+            if (digitMatch) {
+                const recipeIndex = parseInt(digitMatch[1]) - 1;
+                this.tryCraft(recipeIndex);
+            }
+        }
     }
 
     handleBattleInput(keyCode) {
@@ -475,6 +484,7 @@ class GameRPG {
 
         // 敵を倒した場合
         if (enemy.health <= 0) {
+            const enemyType = enemy.type;
             this.currentBattle.enemies.shift();
             const exp = 25 + Math.floor(Math.random() * 25);
             const credits = 10 + Math.floor(Math.random() * 20);
@@ -487,6 +497,9 @@ class GameRPG {
             if (leveledUp) {
                 this.addMessage('レベルアップ！');
             }
+
+            // クエスト進行を更新
+            this.questSystem.updateProgress('enemy_defeated', enemyType, 1);
 
             // アイテムドロップ判定
             if (this.rpgSystem.calculateItemDrop()) {
@@ -1776,6 +1789,12 @@ class GameRPG {
                 // スキル経験値を追加
                 const skillName = this.getSkillNameForResource(result.type);
                 this.rpgSystem.addSkillExp(skillName, 10);
+
+                // クエスト進行を更新
+                this.questSystem.updateProgress('resource_gathered', result.type, result.amount);
+                if (result.rarity === 'rare' || result.rarity === 'legendary') {
+                    this.questSystem.updateProgress('rare_resource_gathered', result.type, result.amount);
+                }
             } else {
                 this.addMessage('スタミナが不足しています');
             }
@@ -1793,6 +1812,35 @@ class GameRPG {
             food: 'herbalism'
         };
         return mapping[resourceType] || 'mining';
+    }
+
+    tryCraft(recipeIndex) {
+        const recipes = this.craftSystem.getAllRecipes();
+        if (recipeIndex < 0 || recipeIndex >= recipes.length) {
+            return;
+        }
+
+        const recipe = recipes[recipeIndex];
+        const baseBonuses = this.baseSystem.getTotalBonuses();
+        const guildBenefits = this.guildSystem.getCurrentBenefits();
+        const craftBonus = (baseBonuses.craftBonus || 0) + (guildBenefits.craftBonus || 0);
+
+        const result = this.craftSystem.craft(recipe.id, this.resourceManager);
+
+        if (result.success) {
+            this.addMessage(`${recipe.name}のクラフトに成功！ (品質: ${result.quality})`);
+
+            // クエスト進行を更新
+            this.questSystem.updateProgress('item_crafted', recipe.type, 1);
+            if (result.quality === 'superior' || result.quality === 'masterwork') {
+                this.questSystem.updateProgress('quality_item_crafted', recipe.type, 1);
+            }
+
+            // ギルド貢献度を追加
+            this.guildSystem.addContribution(5);
+        } else {
+            this.addMessage(`クラフトに失敗: ${result.message}`);
+        }
     }
 
     // 基地建設UI

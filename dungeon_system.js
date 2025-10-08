@@ -109,9 +109,12 @@ class DungeonSystem {
 
         if (roomType === 'normal') {
             const enemyCount = Math.floor(Math.random() * 3) + 2;
+            const enemyTypes = ['slime', 'goblin', 'skeleton', 'bat', 'spider'];
+
             for (let i = 0; i < enemyCount; i++) {
+                const randomType = enemyTypes[Math.floor(Math.random() * enemyTypes.length)];
                 enemies.push({
-                    type: 'basic',
+                    type: randomType,
                     health: Math.floor(40 * levelScale) + Math.floor(Math.random() * 20),
                     damage: Math.floor(8 * levelScale) + Math.floor(Math.random() * 4),
                     experience: Math.floor(15 * levelScale)
