@@ -13,6 +13,13 @@ class GameRPG {
         this.resourceManager = new ResourceManager();
         this.craftSystem = new CraftSystem();
 
+        // サバイバル・クラフト拡張システム
+        this.baseSystem = new BaseSystem();
+        this.questSystem = new QuestSystem();
+        this.timeWeatherSystem = new TimeWeatherSystem();
+        this.guildSystem = new GuildSystem();
+        this.tradeSystem = new TradeSystem();
+
         // マルチプレイヤーシステム
         this.multiplayerManager = new MultiplayerManager();
         this.aiPlayerManager = new AIPlayerManager();
@@ -38,7 +45,11 @@ class GameRPG {
             tournament: false,
             spectator: false,
             resources: true,
-            craft: false
+            craft: false,
+            base: false,
+            quest: false,
+            guild: false,
+            trade: false
         };
 
         // プレイヤーキャラクター（RPG版）
@@ -99,9 +110,18 @@ class GameRPG {
         // 初期装備を追加
         this.addStartingItems();
 
+        // 基地を初期位置に設置
+        this.baseSystem.setBaseLocation(this.playerChar.x, this.playerChar.y);
+
+        // デイリークエストを生成
+        this.questSystem.generateDailyQuests(this.rpgSystem.player.level);
+
+        // ギルドに加入（デモ用）
+        this.guildSystem.joinGuild('冒険者ギルド');
+
         this.addMessage('新しいダンジョンに入りました');
         this.addMessage('矢印キー: 移動, Space: アクション, I: インベントリ, E: 装備, S: ステータス');
-        this.addMessage('H: リソース採取, K: クラフトメニュー');
+        this.addMessage('H: リソース採取, K: クラフトメニュー, B: 基地, Q: クエスト, G: ギルド, T: トレード');
         this.gameState = 'dungeon_explore';
     }
 
@@ -276,6 +296,26 @@ class GameRPG {
         // クラフトメニュー
         if (keyCode === 'KeyK') {
             this.showUI.craft = !this.showUI.craft;
+        }
+
+        // 基地建設メニュー
+        if (keyCode === 'KeyB') {
+            this.showUI.base = !this.showUI.base;
+        }
+
+        // クエストメニュー
+        if (keyCode === 'KeyJ') {
+            this.showUI.quest = !this.showUI.quest;
+        }
+
+        // ギルドメニュー
+        if (keyCode === 'KeyG') {
+            this.showUI.guild = !this.showUI.guild;
+        }
+
+        // トレードメニュー
+        if (keyCode === 'KeyU') {
+            this.showUI.trade = !this.showUI.trade;
         }
     }
 
@@ -619,6 +659,20 @@ class GameRPG {
     update() {
         // スタミナ・空腹システムの更新
         this.rpgSystem.updateSurvivalSystem();
+
+        // 時間・天候システムの更新
+        const timeUpdate = this.timeWeatherSystem.update();
+        if (timeUpdate.newDay) {
+            this.addMessage(`${timeUpdate.day}日目の朝です`);
+            this.questSystem.checkDailyReset(this.rpgSystem.player.level);
+            this.tradeSystem.checkWanderingMerchant();
+        }
+
+        // ギルドブーストの期限切れチェック
+        const expiredBoosts = this.guildSystem.updateBoosts();
+        for (const boostName of expiredBoosts) {
+            this.addMessage(`${boostName}の効果が切れました`);
+        }
     }
 
     render() {
@@ -666,6 +720,13 @@ class GameRPG {
         this.drawChatUI();
         this.renderLeaderboard();
         this.renderTournament();
+
+        // 新システムのUI
+        this.renderBaseUI();
+        this.renderQuestUI();
+        this.renderGuildUI();
+        this.renderTradeUI();
+        this.renderTimeWeatherUI();
     }
 
     renderMenu() {
@@ -1732,6 +1793,219 @@ class GameRPG {
             food: 'herbalism'
         };
         return mapping[resourceType] || 'mining';
+    }
+
+    // 基地建設UI
+    renderBaseUI() {
+        if (!this.showUI.base) return;
+
+        const x = 420;
+        const y = 100;
+        const width = 360;
+        const height = 480;
+
+        this.ctx.fillStyle = 'rgba(0, 0, 0, 0.85)';
+        this.ctx.fillRect(x, y, width, height);
+        this.ctx.strokeStyle = '#8B4513';
+        this.ctx.lineWidth = 2;
+        this.ctx.strokeRect(x, y, width, height);
+
+        this.ctx.fillStyle = '#FFD700';
+        this.ctx.font = 'bold 18px Arial';
+        this.ctx.fillText('基地建設 (B)', x + 10, y + 25);
+
+        const baseInfo = this.baseSystem;
+        this.ctx.fillStyle = '#ffffff';
+        this.ctx.font = '14px Arial';
+        this.ctx.fillText(`基地Lv.${baseInfo.baseLevel} (範囲: ${baseInfo.baseRadius}m)`, x + 10, y + 50);
+
+        this.ctx.fillText('建設可能な施設:', x + 10, y + 75);
+
+        const buildings = this.baseSystem.getBuildingsList().slice(0, 8);
+        let yOffset = 100;
+
+        for (const building of buildings) {
+            this.ctx.fillStyle = '#aaaaaa';
+            this.ctx.fillText(`${building.name}`, x + 10, y + yOffset);
+
+            const costText = Object.entries(building.cost).map(([r, amt]) => `${r}:${amt}`).join(', ');
+            this.ctx.font = '12px Arial';
+            this.ctx.fillText(costText, x + 20, y + yOffset + 15);
+            this.ctx.font = '14px Arial';
+
+            yOffset += 45;
+        }
+
+        this.ctx.fillStyle = '#888888';
+        this.ctx.font = '12px Arial';
+        this.ctx.fillText('※基地範囲内で建設可能', x + 10, y + height - 10);
+    }
+
+    // クエストUI
+    renderQuestUI() {
+        if (!this.showUI.quest) return;
+
+        const x = 420;
+        const y = 100;
+        const width = 360;
+        const height = 480;
+
+        this.ctx.fillStyle = 'rgba(0, 0, 0, 0.85)';
+        this.ctx.fillRect(x, y, width, height);
+        this.ctx.strokeStyle = '#FFD700';
+        this.ctx.lineWidth = 2;
+        this.ctx.strokeRect(x, y, width, height);
+
+        this.ctx.fillStyle = '#FFD700';
+        this.ctx.font = 'bold 18px Arial';
+        this.ctx.fillText('クエスト (J)', x + 10, y + 25);
+
+        const activeQuests = this.questSystem.getActiveQuests();
+        this.ctx.fillStyle = '#ffffff';
+        this.ctx.font = '14px Arial';
+        this.ctx.fillText(`アクティブ: ${activeQuests.length}/5`, x + 10, y + 50);
+
+        let yOffset = 75;
+        for (const quest of activeQuests.slice(0, 6)) {
+            this.ctx.fillStyle = quest.completed ? '#00ff00' : '#ffffff';
+            this.ctx.fillText(`${quest.name}`, x + 10, y + yOffset);
+
+            this.ctx.fillStyle = '#aaaaaa';
+            this.ctx.font = '12px Arial';
+            this.ctx.fillText(`${quest.description}`, x + 20, y + yOffset + 15);
+            this.ctx.fillText(`進行度: ${quest.progressPercent}%`, x + 20, y + yOffset + 30);
+            this.ctx.font = '14px Arial';
+
+            yOffset += 55;
+        }
+
+        this.ctx.fillStyle = '#888888';
+        this.ctx.font = '12px Arial';
+        this.ctx.fillText('完了したクエストは自動的に報酬を獲得', x + 10, y + height - 10);
+    }
+
+    // ギルドUI
+    renderGuildUI() {
+        if (!this.showUI.guild) return;
+
+        const x = 420;
+        const y = 100;
+        const width = 360;
+        const height = 400;
+
+        this.ctx.fillStyle = 'rgba(0, 0, 0, 0.85)';
+        this.ctx.fillRect(x, y, width, height);
+        this.ctx.strokeStyle = '#9370DB';
+        this.ctx.lineWidth = 2;
+        this.ctx.strokeRect(x, y, width, height);
+
+        this.ctx.fillStyle = '#9370DB';
+        this.ctx.font = 'bold 18px Arial';
+        this.ctx.fillText('ギルド (G)', x + 10, y + 25);
+
+        const guildInfo = this.guildSystem.getGuildInfo();
+        if (guildInfo.inGuild) {
+            this.ctx.fillStyle = '#ffffff';
+            this.ctx.font = '14px Arial';
+            this.ctx.fillText(`${guildInfo.guildName}`, x + 10, y + 50);
+            this.ctx.fillText(`ランク: ${guildInfo.rank}`, x + 10, y + 70);
+            this.ctx.fillText(`貢献度: ${guildInfo.contribution}`, x + 10, y + 90);
+            this.ctx.fillText(`総貢献度: ${guildInfo.totalContribution}`, x + 10, y + 110);
+
+            this.ctx.fillText('ベネフィット:', x + 10, y + 140);
+            let yOffset = 160;
+            const benefits = Object.entries(guildInfo.benefits);
+            for (const [key, value] of benefits.slice(0, 5)) {
+                this.ctx.fillStyle = '#aaaaaa';
+                this.ctx.fillText(`${key}: +${(value * 100).toFixed(0)}%`, x + 20, y + yOffset);
+                yOffset += 20;
+            }
+
+            this.ctx.fillStyle = '#ffffff';
+            this.ctx.fillText(`次のランク: ${guildInfo.nextRank}`, x + 10, y + 280);
+            if (guildInfo.nextRankRequirement) {
+                this.ctx.fillText(`必要貢献度: ${guildInfo.nextRankRequirement}`, x + 10, y + 300);
+            }
+        } else {
+            this.ctx.fillStyle = '#888888';
+            this.ctx.fillText('ギルドに所属していません', x + 10, y + 50);
+        }
+    }
+
+    // トレードUI
+    renderTradeUI() {
+        if (!this.showUI.trade) return;
+
+        const x = 420;
+        const y = 100;
+        const width = 360;
+        const height = 400;
+
+        this.ctx.fillStyle = 'rgba(0, 0, 0, 0.85)';
+        this.ctx.fillRect(x, y, width, height);
+        this.ctx.strokeStyle = '#FFD700';
+        this.ctx.lineWidth = 2;
+        this.ctx.strokeRect(x, y, width, height);
+
+        this.ctx.fillStyle = '#FFD700';
+        this.ctx.font = 'bold 18px Arial';
+        this.ctx.fillText('トレード (U)', x + 10, y + 25);
+
+        this.ctx.fillStyle = '#ffffff';
+        this.ctx.font = '14px Arial';
+        this.ctx.fillText('NPCトレーダー:', x + 10, y + 50);
+
+        const traders = this.tradeSystem.getAvailableTraders();
+        let yOffset = 75;
+
+        for (const trader of traders) {
+            this.ctx.fillStyle = '#00ff88';
+            this.ctx.fillText(`${trader.name}`, x + 10, y + yOffset);
+
+            this.ctx.fillStyle = '#aaaaaa';
+            this.ctx.font = '12px Arial';
+            this.ctx.fillText(`取引可能数: ${trader.trades.length}`, x + 20, y + yOffset + 15);
+            this.ctx.font = '14px Arial';
+
+            yOffset += 40;
+        }
+
+        const marketInfo = this.tradeSystem.getMarketInfo();
+        this.ctx.fillStyle = '#ffffff';
+        this.ctx.fillText(`マーケット出品数: ${marketInfo.totalListings}`, x + 10, y + 250);
+        this.ctx.fillText(`自分の出品: ${marketInfo.playerListings}`, x + 10, y + 270);
+    }
+
+    // 時間・天候UI（常時表示）
+    renderTimeWeatherUI() {
+        const info = this.timeWeatherSystem.getInfo();
+        const effect = this.timeWeatherSystem.getScreenEffect();
+
+        // 画面右上に表示
+        const x = this.canvas.width - 180;
+        const y = 10;
+
+        this.ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+        this.ctx.fillRect(x, y, 170, 80);
+
+        this.ctx.fillStyle = '#ffffff';
+        this.ctx.font = '14px Arial';
+        this.ctx.fillText(`${info.day}日目 ${info.time}`, x + 10, y + 20);
+        this.ctx.fillText(`${info.phase} / ${info.weather}`, x + 10, y + 40);
+        this.ctx.fillText(`${info.season}`, x + 10, y + 60);
+
+        // 天候エフェクトを画面全体に適用
+        if (effect.weatherColor) {
+            this.ctx.fillStyle = effect.weatherColor;
+            this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+        }
+
+        // 明るさ調整（夜は暗く）
+        const darkness = 1 - effect.brightness;
+        if (darkness > 0) {
+            this.ctx.fillStyle = `rgba(0, 0, 20, ${darkness * 0.7})`;
+            this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+        }
     }
 
     gameLoop() {
