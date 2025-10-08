@@ -37,7 +37,7 @@ class GameRPG {
             spectator: false
         };
 
-        // プレイヤーキャラクター（RPG版）
+        // プレイヤーキャラクター(RPG版)
         this.playerChar = {
             x: this.canvas.width / 2,
             y: this.canvas.height / 2,
@@ -345,16 +345,16 @@ class GameRPG {
         if (this.rpgSystem.player.availableStatPoints > 0) {
             if (keyCode === 'Digit1') {
                 this.rpgSystem.allocateStatPoint('attack');
-                this.addMessage('攻撃力が上がった！');
+                this.addMessage('攻撃力が上がった!');
             } else if (keyCode === 'Digit2') {
                 this.rpgSystem.allocateStatPoint('defense');
-                this.addMessage('防御力が上がった！');
+                this.addMessage('防御力が上がった!');
             } else if (keyCode === 'Digit3') {
                 this.rpgSystem.allocateStatPoint('speed');
-                this.addMessage('速度が上がった！');
+                this.addMessage('速度が上がった!');
             } else if (keyCode === 'Digit4') {
                 this.rpgSystem.allocateStatPoint('luck');
-                this.addMessage('幸運度が上がった！');
+                this.addMessage('幸運度が上がった!');
             }
         }
     }
@@ -395,7 +395,7 @@ class GameRPG {
             enemyIndex: 0
         };
         this.gameState = 'battle';
-        this.addMessage('戦闘開始！ スペース: 攻撃, E: 逃走');
+        this.addMessage('戦闘開始! スペース: 攻撃, E: 逃走');
     }
 
     performAttack() {
@@ -407,7 +407,7 @@ class GameRPG {
         enemy.health -= damageResult.damage;
 
         if (damageResult.critical) {
-            this.addMessage(`クリティカル！ ${damageResult.damage}ダメージ！`);
+            this.addMessage(`クリティカル! ${damageResult.damage}ダメージ!`);
         } else {
             this.addMessage(`${damageResult.damage}ダメージを与えた`);
         }
@@ -421,17 +421,17 @@ class GameRPG {
             const leveledUp = this.rpgSystem.addExperience(exp);
             this.rpgSystem.addCredits(credits);
 
-            this.addMessage(`敵を倒した！ EXP:${exp} クレジット:${credits}`);
+            this.addMessage(`敵を倒した! EXP:${exp} クレジット:${credits}`);
 
             if (leveledUp) {
-                this.addMessage('レベルアップ！');
+                this.addMessage('レベルアップ!');
             }
 
             // アイテムドロップ判定
             if (this.rpgSystem.calculateItemDrop()) {
                 const item = this.itemSystem.generateRandomItem(this.rpgSystem.player.level);
                 this.inventorySystem.addItem(item);
-                this.addMessage(`${item.name}を入手した！`);
+                this.addMessage(`${item.name}を入手した!`);
             }
         }
 
@@ -440,7 +440,7 @@ class GameRPG {
             this.dungeonSystem.clearCurrentRoom();
             this.currentBattle = null;
             this.gameState = 'dungeon_explore';
-            this.addMessage('戦闘に勝利した！');
+            this.addMessage('戦闘に勝利した!');
             return;
         }
 
@@ -467,11 +467,11 @@ class GameRPG {
         for (const item of room.items) {
             if (item.type === 'credits') {
                 const earned = this.rpgSystem.addCredits(item.amount);
-                this.addMessage(`${earned}クレジットを獲得！`);
+                this.addMessage(`${earned}クレジットを獲得!`);
             } else {
                 const generatedItem = this.itemSystem.generateRandomItem(this.rpgSystem.player.level, item.rarity);
                 this.inventorySystem.addItem(generatedItem);
-                this.addMessage(`${generatedItem.name}を発見！`);
+                this.addMessage(`${generatedItem.name}を発見!`);
             }
         }
 
@@ -639,7 +639,7 @@ class GameRPG {
             this.renderUI();
         }
 
-        // マルチプレイヤーUI（常時表示可能）
+        // マルチプレイヤーUI(常時表示可能)
         this.drawMultiplayerUI();
         this.drawChatUI();
         this.renderLeaderboard();
@@ -680,7 +680,7 @@ class GameRPG {
 
             if (room.enemies.length > 0 && !room.cleared) {
                 this.ctx.fillStyle = '#ff6666';
-                this.ctx.fillText('敵がいる！', this.canvas.width / 2, 70);
+                this.ctx.fillText('敵がいる!', this.canvas.width / 2, 70);
             }
         }
     }
@@ -1221,7 +1221,7 @@ class GameRPG {
             y: this.playerChar.y
         });
 
-        this.addMessage('攻撃を実行しました！');
+        this.addMessage('攻撃を実行しました!');
     }
 
     performPvPSpecialAttack() {
@@ -1232,20 +1232,20 @@ class GameRPG {
             y: this.playerChar.y
         });
 
-        this.addMessage('スペシャル攻撃を実行しました！');
+        this.addMessage('スペシャル攻撃を実行しました!');
     }
 
     processBattleResult(data) {
         if (data.target === this.pvpOpponent.id) {
             this.pvpOpponent.hp -= data.damage;
-            this.addMessage(`${data.damage}ダメージを与えました！`);
+            this.addMessage(`${data.damage}ダメージを与えました!`);
 
             if (this.pvpOpponent.hp <= 0) {
                 this.winPvPBattle();
             }
         } else {
             this.rpgSystem.player.hp -= data.damage;
-            this.addMessage(`${data.damage}ダメージを受けました！`);
+            this.addMessage(`${data.damage}ダメージを受けました!`);
 
             if (this.rpgSystem.player.hp <= 0) {
                 this.losePvPBattle();
@@ -1263,7 +1263,7 @@ class GameRPG {
     }
 
     winPvPBattle() {
-        this.addMessage('PvPバトルに勝利しました！');
+        this.addMessage('PvPバトルに勝利しました!');
         this.endPvPBattle();
 
         // ランキングシステムに記録

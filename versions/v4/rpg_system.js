@@ -68,7 +68,7 @@ class RPGSystem {
             this.player.level++;
             this.player.availableStatPoints += this.statPointsPerLevel;
 
-            // 次のレベルまでの経験値を計算（調整済み）
+            // 次のレベルまでの経験値を計算(調整済み)
             this.player.experienceToNext = Math.floor(80 * Math.pow(1.15, this.player.level - 1));
 
             // レベルアップ時のヘルス回復
@@ -210,7 +210,7 @@ class RPGSystem {
         // クレジットの一部を保持
         const retainedCredits = Math.floor(this.player.credits * 0.5);
 
-        // ステータスリセット（レベルは保持）
+        // ステータスリセット(レベルは保持)
         const oldLevel = this.player.level;
         const oldMaxHealth = this.player.maxHealth;
 

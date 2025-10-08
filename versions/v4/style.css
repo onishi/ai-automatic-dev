@@ -1,0 +1,43 @@
+body {
+    margin: 0;
+    padding: 0;
+    background: linear-gradient(to bottom, #000428, #004e92);
+    color: white;
+    font-family: 'Courier New', monospace;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+}
+
+.game-container {
+    text-align: center;
+}
+
+#gameCanvas {
+    border: 2px solid #00ffff;
+    background: radial-gradient(ellipse at center, #001122 0%, #000000 100%);
+    box-shadow: 0 0 20px #00ffff;
+}
+
+.game-info {
+    margin-top: 20px;
+    display: flex;
+    justify-content: space-between;
+    width: 800px;
+}
+
+.score {
+    font-size: 24px;
+    color: #00ffff;
+    text-shadow: 0 0 10px #00ffff;
+}
+
+.controls {
+    font-size: 14px;
+    color: #cccccc;
+}
+
+.controls p {
+    margin: 0;
+}
